@@ -1,0 +1,24 @@
+{
+  "name": "Conversor-de-Figma-para-Lua-MTA",
+  "version": "1.0.0",
+  "description": "Seu plugin do Figma",
+  "main": "code.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm run bundle",
+    "bundle": "npx esbuild dist/main.js --bundle --outfile=code.js --format=iife --target=es2017 --minify && node -e \"const fs=require('fs'); let html=fs.readFileSync('ui.html','utf8').replace(/\\r?\\n/g,''); fs.writeFileSync('dist/main.js', fs.readFileSync('code.js','utf8'));\"",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "watch": "npx esbuild src/main.ts --bundle --outfile=code.js --format=iife --target=es2017 --watch"
+  },
+  "author": "",
+  "license": "",
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@figma/eslint-plugin-figma-plugins": "*",
+    "@figma/plugin-typings": "*",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1"
+  }
+}
