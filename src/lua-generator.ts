@@ -1,8 +1,5 @@
-// Gerador de código Lua MTA a partir de nós Figma
 import { NodeInfo, FillInfo, ColorInfo, ConversionConfig, ConversionResult } from './types';
 
-// Mapeamento de fonts Figma → MTA nativas + fator de escala Y (altura da font MTA vs Figma)
-// MTA possui: default, default-bold, clear, arial, sans, pricedown, bankgothic, diploma, beckett
 const FONT_CONFIG: Record<string, { mta: string; yScale: number }> = {
   'inter': { mta: 'default', yScale: 1.15 },
   'roboto': { mta: 'default', yScale: 1.15 },
@@ -83,7 +80,6 @@ function mapAlignV(align: string | undefined): string {
 
 export function extractNodeInfo(node: SceneNode): NodeInfo | null {
   if (!node.visible) return null;
-  // Usar absoluteTransform quando disponível (posição absoluta no canvas, mais preciso para grupos)
   let absX = node.x;
   let absY = node.y;
   if ('absoluteTransform' in node && node.absoluteTransform) {
@@ -132,7 +128,6 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
   return info;
 }
 
-// Gera código Lua completo — adaptativo (centrado + escala proporcional)
 export function generateLuaCode(
   nodes: NodeInfo[],
   config: ConversionConfig,
@@ -149,7 +144,6 @@ export function generateLuaCode(
       node.name.toLowerCase() === 'background_image'
     ) continue;
 
-    // TEXT — compensação de escala de font Figma → MTA
     if (node.type === 'TEXT') {
       const text = node.characters || node.name;
       let color = '255, 255, 255, 255';
@@ -158,17 +152,14 @@ export function generateLuaCode(
       const alignH = mapAlignH(node.textAlignHorizontal);
       const alignV = mapAlignV(node.textAlignVertical);
       const escapedText = text.replace(/"/g, '\\"').replace(/\s+/g, ' ').trim();
-      // Compensar tamanho: font MTA base é menor que Figma — aplicar yScale na escala
       const fontSize = node.fontSize ? Math.round(node.fontSize) : 12;
       const scale = (fontSize / 16) * fontConfig.yScale;
-      // Compensar altura vertical para alinhar baseline (font MTA tem baseline diferente)
       const yOffset = Math.round((fontSize * (fontConfig.yScale - 1)) / 2);
       const call = `dxDrawText("${escapedText}", ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y - yOffset)}, ox + zoom*${toInt(node.x + node.width)}, oy + zoom*${toInt(node.y + node.height - yOffset)}, tocolor(${color}), zoom*${scale.toFixed(2)}, "${fontConfig.mta}", "${alignH}", "${alignV}", false, false, false, true, false)`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
       continue;
     }
 
-    // IMAGE
     const imageFill = node.fills.find((f) => f.type === 'IMAGE');
     if (imageFill) {
       const safeName = sanitizeFileName(node.name);
@@ -177,7 +168,6 @@ export function generateLuaCode(
       continue;
     }
 
-    // SHAPES (retângulos)
     if (node.fills.length === 0) continue;
     const fill = node.fills[0];
     if (!fill.visible || fill.type === 'NONE' || !fill.color) continue;
@@ -220,7 +210,6 @@ export function generateLuaCode(
     ''
   );
 
-  // Variáveis principais — adaptativa (aspect ratio preservado, centralizado)
   luaLines.push(
     'local sW, sH = guiGetScreenSize()',
     'local isOpen = true',
@@ -276,8 +265,6 @@ export function extractUniqueFonts(nodes: NodeInfo[]): string[] {
 export function generateMetaXML(imageNames: string[], fontNames: string[] = []): string {
   const fileEntries: string[] = [];
   for (const name of imageNames) fileEntries.push(`  <file src="assets/images/${name}" />`);
-  // Fonts: NÃO incluir TTFs inválidos; usuário adiciona manualmente se quiser dxCreateFont
-  // Apenas documentar no meta.xml se quiser
   const files = fileEntries.length > 0 ? '\n' + fileEntries.join('\n') : '';
   return `<meta>
   <info name="ProjetoGerado" author="Figma Convert To Lua - SrTermax" version="1.0" type="script" />
