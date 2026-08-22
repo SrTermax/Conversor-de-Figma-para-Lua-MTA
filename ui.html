@@ -5,12 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Conversor de Figma para Lua MTA</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #1e1e1e;
@@ -18,14 +13,12 @@
       padding: 16px;
       font-size: 13px;
     }
-
     .header {
       text-align: center;
       margin-bottom: 20px;
       padding-bottom: 16px;
       border-bottom: 1px solid #333;
     }
-
     .header h1 {
       font-size: 16px;
       font-weight: 600;
@@ -35,16 +28,8 @@
       background-clip: text;
       margin-bottom: 4px;
     }
-
-    .header p {
-      font-size: 11px;
-      color: #888;
-    }
-
-    .config-section {
-      margin-bottom: 16px;
-    }
-
+    .header p { font-size: 11px; color: #888; }
+    .config-section { margin-bottom: 16px; }
     .config-section label {
       display: block;
       font-size: 12px;
@@ -52,7 +37,6 @@
       color: #aaa;
       margin-bottom: 6px;
     }
-
     .config-section input {
       width: 100%;
       padding: 10px 12px;
@@ -63,16 +47,8 @@
       font-size: 13px;
       transition: border-color 0.2s;
     }
-
-    .config-section input:focus {
-      outline: none;
-      border-color: #a855f7;
-    }
-
-    .config-section input::placeholder {
-      color: #666;
-    }
-
+    .config-section input:focus { outline: none; border-color: #a855f7; }
+    .config-section input::placeholder { color: #666; }
     .btn {
       width: 100%;
       padding: 12px;
@@ -84,138 +60,17 @@
       transition: all 0.2s;
       margin-bottom: 8px;
     }
-
     .btn-primary {
       background: linear-gradient(135deg, #a855f7, #ec4899);
       color: white;
     }
-
     .btn-primary:hover {
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
     }
-
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-
-    .btn-secondary {
-      background: #333;
-      color: #e0e0e0;
-      border: 1px solid #444;
-    }
-
-    .btn-secondary:hover {
-      background: #444;
-    }
-
-    .result-section {
-      margin-top: 16px;
-      display: none;
-    }
-
-    .result-section.visible {
-      display: block;
-    }
-
-    .result-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-
-    .result-header h3 {
-      font-size: 12px;
-      font-weight: 500;
-      color: #aaa;
-    }
-
-    .result-stats {
-      font-size: 11px;
-      color: #666;
-    }
-
-    .code-preview {
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 6px;
-      padding: 12px;
-      font-family: 'Monaco', 'Menlo', monospace;
-      font-size: 11px;
-      line-height: 1.5;
-      max-height: 300px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-      color: #d4d4d4;
-    }
-
-    .code-preview::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .code-preview::-webkit-scrollbar-track {
-      background: #1a1a1a;
-    }
-
-    .code-preview::-webkit-scrollbar-thumb {
-      background: #444;
-      border-radius: 3px;
-    }
-
-    .action-buttons {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
-
-    .action-buttons .btn {
-      flex: 1;
-      margin-bottom: 0;
-    }
-
-    .error-message {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #ef4444;
-      padding: 12px;
-      border-radius: 6px;
-      margin-top: 12px;
-      display: none;
-    }
-
-    .error-message.visible {
-      display: block;
-    }
-
-    .success-message {
-      background: rgba(34, 197, 94, 0.1);
-      border: 1px solid rgba(34, 197, 94, 0.3);
-      color: #22c55e;
-      padding: 12px;
-      border-radius: 6px;
-      margin-top: 12px;
-      display: none;
-    }
-
-    .success-message.visible {
-      display: block;
-    }
-
-    .loading {
-      display: none;
-      text-align: center;
-      padding: 20px;
-    }
-
-    .loading.visible {
-      display: block;
-    }
-
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .loading { display: none; text-align: center; padding: 20px; }
+    .loading.visible { display: block; }
     .spinner {
       width: 24px;
       height: 24px;
@@ -225,11 +80,24 @@
       animation: spin 1s linear infinite;
       margin: 0 auto 12px;
     }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .message {
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 12px;
+      display: none;
     }
-
+    .message.visible { display: block; }
+    .error-message {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+    .success-message {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #22c55e;
+    }
     .info-box {
       background: #2d2d2d;
       border: 1px solid #444;
@@ -239,61 +107,18 @@
       font-size: 11px;
       color: #888;
     }
-
-    .info-box h4 {
-      font-size: 11px;
-      font-weight: 600;
-      color: #aaa;
-      margin-bottom: 8px;
-    }
-
-    .info-box ul {
-      list-style: none;
-      padding: 0;
-    }
-
-    .info-box li {
-      margin-bottom: 4px;
-      padding-left: 12px;
-      position: relative;
-    }
-
-    .info-box li::before {
-      content: "•";
-      position: absolute;
-      left: 0;
-      color: #a855f7;
-    }
-
-    .tab-container {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 8px;
-    }
-
-    .tab {
-      flex: 1;
-      padding: 8px;
-      background: #2d2d2d;
-      border: 1px solid #444;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 500;
-      color: #888;
-      cursor: pointer;
+    .info-box h4 { font-size: 11px; font-weight: 600; color: #aaa; margin-bottom: 8px; }
+    .info-box ul { list-style: none; padding: 0; }
+    .info-box li { margin-bottom: 4px; padding-left: 12px; position: relative; }
+    .info-box li::before { content: "•"; position: absolute; left: 0; color: #a855f7; }
+    .stats {
       text-align: center;
-      transition: all 0.2s;
+      font-size: 11px;
+      color: #666;
+      margin-top: 12px;
+      display: none;
     }
-
-    .tab.active {
-      background: #a855f7;
-      border-color: #a855f7;
-      color: white;
-    }
-
-    .tab:hover:not(.active) {
-      background: #333;
-    }
+    .stats.visible { display: block; }
   </style>
 </head>
 <body>
@@ -304,185 +129,130 @@
 
   <div class="config-section">
     <label for="backgroundName">Nome do Background (Figma)</label>
-    <input
-      type="text"
-      id="backgroundName"
-      placeholder="Ex: Background"
-      value="Background"
-    />
+    <input type="text" id="backgroundName" placeholder="Ex: Background" value="Background" />
   </div>
 
-  <button class="btn btn-primary" id="convertBtn">
-    CONVERTER SELEÇÃO
-  </button>
+  <button class="btn btn-primary" id="convertBtn">CONVERTER E BAIXAR ZIP</button>
 
   <div class="loading" id="loading">
     <div class="spinner"></div>
-    <p>Convertendo...</p>
+    <p>Convertendo e gerando ZIP...</p>
   </div>
 
-  <div class="error-message" id="errorMessage"></div>
-  <div class="success-message" id="successMessage"></div>
-
-  <div class="result-section" id="resultSection">
-    <div class="result-header">
-      <h3>Código Lua Gerado</h3>
-      <span class="result-stats" id="resultStats"></span>
-    </div>
-
-    <div class="tab-container">
-      <div class="tab active" data-tab="lua">Lua Code</div>
-      <div class="tab" data-tab="meta">Meta XML</div>
-    </div>
-
-    <div class="code-preview" id="codePreview"></div>
-
-    <div class="action-buttons">
-      <button class="btn btn-secondary" id="copyBtn">Copiar Código</button>
-      <button class="btn btn-secondary" id="downloadBtn">Download ZIP</button>
-    </div>
-  </div>
+  <div class="message error-message" id="errorMessage"></div>
+  <div class="message success-message" id="successMessage"></div>
+  <div class="stats" id="stats"></div>
 
   <div class="info-box">
     <h4>Instruções</h4>
     <ul>
       <li>Selecione um ou mais frames no Figma</li>
-      <li>Clique em "Converter Seleção"</li>
-      <li>Copie o código ou faça download do ZIP</li>
+      <li>Clique em "Converter e Baixar ZIP"</li>
+      <li>O ZIP será baixado automaticamente</li>
       <li>Para imagens, exporte manualmente do Figma</li>
     </ul>
   </div>
 
-  <!-- JSZip via CDN para download ZIP -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-
   <script>
     const convertBtn = document.getElementById('convertBtn');
     const loading = document.getElementById('loading');
     const errorMessage = document.getElementById('errorMessage');
     const successMessage = document.getElementById('successMessage');
-    const resultSection = document.getElementById('resultSection');
-    const codePreview = document.getElementById('codePreview');
-    const resultStats = document.getElementById('resultStats');
-    const copyBtn = document.getElementById('copyBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
+    const stats = document.getElementById('stats');
     const backgroundNameInput = document.getElementById('backgroundName');
-    const tabs = document.querySelectorAll('.tab');
 
     let currentLuaCode = '';
     let currentMetaXML = '';
     let currentImages = [];
-    let currentTab = 'lua';
+    let currentFonts = [];
+    let currentResolution = '';
 
-    // Converter seleção
-    convertBtn.addEventListener('click', () => {
-      const backgroundName = backgroundNameInput.value.trim() || 'Background';
-
-      // Reset UI
+    function hideAll() {
       errorMessage.classList.remove('visible');
       successMessage.classList.remove('visible');
-      resultSection.classList.remove('visible');
-      loading.classList.add('visible');
-      convertBtn.disabled = true;
+      stats.classList.remove('visible');
+    }
 
-      // Enviar mensagem para o plugin
-      parent.postMessage({
-        pluginMessage: {
-          type: 'convert',
-          backgroundName: backgroundName,
-        },
-      }, '*');
-    });
+    function showError(msg) {
+      hideAll();
+      loading.classList.remove('visible');
+      convertBtn.disabled = false;
+      errorMessage.textContent = msg;
+      errorMessage.classList.add('visible');
+    }
 
-    // Copiar código
-    copyBtn.addEventListener('click', () => {
-      const code = currentTab === 'lua' ? currentLuaCode : currentMetaXML;
-      navigator.clipboard.writeText(code).then(() => {
-        successMessage.textContent = 'Código copiado para a área de transferência!';
-        successMessage.classList.add('visible');
-        setTimeout(() => {
-          successMessage.classList.remove('visible');
-        }, 2000);
-      });
-    });
+    function showSuccess(msg) {
+      successMessage.textContent = msg;
+      successMessage.classList.add('visible');
+    }
 
-    // Download ZIP
-    downloadBtn.addEventListener('click', async () => {
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function sanitizeFileName(name) {
+      return name.replace(/\s/g, '_').replace(/[^\w\-.]/g, '');
+    }
+
+    async function generateAndDownloadZIP(luaCode, metaXML, images) {
       if (typeof JSZip === 'undefined') {
-        errorMessage.textContent = 'Erro: JSZip não carregado. Verifique sua conexão.';
-        errorMessage.classList.add('visible');
+        showError('Erro: JSZip não carregado. Verifique sua conexão.');
         return;
       }
 
       const zip = new JSZip();
+      zip.file('ProjetoGerado.lua', luaCode);
+      zip.file('meta.xml', metaXML);
 
-      // Adicionar arquivo Lua
-      zip.file('ProjetoGerado.lua', currentLuaCode);
-
-      // Adicionar meta.xml
-      zip.file('meta.xml', currentMetaXML);
-
-      // Adicionar imagens se houver
-      if (currentImages.length > 0) {
+      if (images.length > 0) {
         const imagesFolder = zip.folder('assets/images');
-        for (const img of currentImages) {
+        for (const img of images) {
           imagesFolder.file(img.name, new Uint8Array(img.data));
         }
       }
 
-      // Gerar e baixar ZIP
       const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, 'ProjetoGerado.zip');
-
-      successMessage.textContent = 'ZIP baixado com sucesso!';
-      successMessage.classList.add('visible');
-      setTimeout(() => {
-        successMessage.classList.remove('visible');
-      }, 2000);
-    });
-
-    // Tabs
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        tabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        currentTab = tab.dataset.tab;
-        updateCodePreview();
-      });
-    });
-
-    function updateCodePreview() {
-      codePreview.textContent = currentTab === 'lua' ? currentLuaCode : currentMetaXML;
+      downloadBlob(content, 'ProjetoGerado.zip');
     }
 
-    // Escutar mensagens do plugin
-    window.onmessage = (event) => {
+    convertBtn.addEventListener('click', () => {
+      const backgroundName = backgroundNameInput.value.trim() || 'Background';
+      hideAll();
+      loading.classList.add('visible');
+      convertBtn.disabled = true;
+
+      parent.postMessage({
+        pluginMessage: { type: 'convert', backgroundName }
+      }, '*');
+    });
+
+    window.onmessage = async (event) => {
       const msg = event.data.pluginMessage;
+      if (!msg) return;
 
       if (msg.type === 'result') {
         currentLuaCode = msg.luaCode;
         currentMetaXML = msg.metaXML;
 
-        resultStats.textContent = `${msg.nodeCount} nós | ${msg.resolution}`;
-        updateCodePreview();
+        stats.textContent = `${msg.nodeCount} nós | ${msg.resolution}`;
+        stats.classList.add('visible');
 
+        await generateAndDownloadZIP(currentLuaCode, currentMetaXML, currentImages.length > 0 ? currentImages : []);
         loading.classList.remove('visible');
         convertBtn.disabled = false;
-        resultSection.classList.add('visible');
-        successMessage.textContent = 'Conversão concluída com sucesso!';
-        successMessage.classList.add('visible');
-
-        setTimeout(() => {
-          successMessage.classList.remove('visible');
-        }, 3000);
+        showSuccess(`ZIP baixado com sucesso! ${msg.nodeCount} nós.`);
       } else if (msg.type === 'images') {
         currentImages = msg.images;
       } else if (msg.type === 'error') {
-        loading.classList.remove('visible');
-        convertBtn.disabled = false;
-        errorMessage.textContent = msg.message;
-        errorMessage.classList.add('visible');
+        showError(msg.message);
       }
     };
   </script>

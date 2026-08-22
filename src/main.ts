@@ -1,5 +1,5 @@
 // Entry point do plugin Conversor de Figma para Lua MTA
-import { extractNodeInfo, generateLuaCode, generateMetaXML } from './lua-generator';
+import { extractNodeInfo, generateLuaCode, generateMetaXML, extractUniqueFonts } from './lua-generator';
 import { NodeInfo, ConversionConfig, ConversionResult } from './types';
 
 // Mostrar UI do plugin
@@ -16,12 +16,21 @@ figma.ui.onmessage = async (msg) => {
 
 // Função principal de conversão
 async function convertSelection(backgroundName: string) {
-  const selection = figma.currentPage.selection;
+  let selection = figma.currentPage.selection;
+
+  // Se nada selecionado, selecionar tudo automaticamente
+  if (selection.length === 0) {
+    const allNodes: SceneNode[] = [];
+    for (const child of figma.currentPage.children) {
+      allNodes.push(child);
+    }
+    selection = allNodes;
+  }
 
   if (selection.length === 0) {
     figma.ui.postMessage({
       type: 'error',
-      message: 'Nenhum nó selecionado. Selecione um ou mais frames para converter.',
+      message: 'Nenhum nó encontrado na página.',
     });
     return;
   }
@@ -69,25 +78,17 @@ async function convertSelection(backgroundName: string) {
       return `${safeName}.png`;
     });
 
+    const fontNames = extractUniqueFonts(allNodes);
+
     const luaCode = generateLuaCode(allNodes, config, imageNames);
-    const metaXML = generateMetaXML(imageNames);
+    const metaXML = generateMetaXML(imageNames, fontNames);
 
-    // Enviar resultado para UI
-    figma.ui.postMessage({
-      type: 'result',
-      luaCode,
-      metaXML,
-      imageCount: imageNodes.length,
-      nodeCount: allNodes.length,
-      resolution: `${resW}x${resH}`,
-    });
-
-    // Exportar imagens se houver
+    // Exportar imagens PRIMEIRO (antes de enviar resultado)
     if (imageNodes.length > 0) {
       const images: { name: string; data: Uint8Array }[] = [];
 
       for (const nodeInfo of imageNodes) {
-        const figmaNode = figma.getNodeById(nodeInfo.id);
+        const figmaNode = await figma.getNodeByIdAsync(nodeInfo.id);
         if (figmaNode && 'exportAsync' in figmaNode) {
           try {
             const exportSettings: ExportSettingsImage = { format: 'PNG', suffix: '', constraint: { type: 'SCALE', value: 1 } };
@@ -113,6 +114,17 @@ async function convertSelection(backgroundName: string) {
         });
       }
     }
+
+    // Enviar resultado para UI (depois das imagens)
+    figma.ui.postMessage({
+      type: 'result',
+      luaCode,
+      metaXML,
+      imageCount: imageNodes.length,
+      nodeCount: allNodes.length,
+      resolution: `${resW}x${resH}`,
+      fonts: fontNames,
+    });
 
     figma.notify(`Conversão concluída! ${allNodes.length} nós processados.`, {
       timeout: 3000,
@@ -143,24 +155,21 @@ function processNode(
     return; // Não adicionar Background à lista
   }
 
-  // Extrair informações do nó
-  const info = extractNodeInfo(node);
-  if (info) {
-    allNodes.push(info);
-  }
-
-  // Processar filhos se for um container
+  // Processar filhos primeiro (profundidade)
   if ('children' in node) {
     const container = node as ChildrenMixin;
     for (const child of container.children) {
-      if (child.type === 'FRAME' || child.type === 'GROUP' || child.type === 'COMPONENT' || child.type === 'INSTANCE') {
-        processNode(child as SceneNode, allNodes, backgroundName, onBackground);
-      } else {
-        const childInfo = extractNodeInfo(child as SceneNode);
-        if (childInfo) {
-          allNodes.push(childInfo);
-        }
-      }
+      processNode(child as SceneNode, allNodes, backgroundName, onBackground);
+    }
+  }
+
+  // Extrair informações do nó após processar filhos
+  const info = extractNodeInfo(node);
+  if (info) {
+    // Não adicionar containers vazios (frames/groups sem fill)
+    const isContainer = ('children' in node) && info.fills.length === 0 && info.type !== 'TEXT';
+    if (!isContainer) {
+      allNodes.push(info);
     }
   }
 }

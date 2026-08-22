@@ -5,7 +5,7 @@
   "main": "code.js",
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run bundle",
-    "bundle": "npx esbuild dist/main.js --bundle --outfile=code.js --format=iife --target=es2017 --minify && node -e \"const fs=require('fs'); let html=fs.readFileSync('ui.html','utf8').replace(/\\r?\\n/g,''); fs.writeFileSync('dist/main.js', fs.readFileSync('code.js','utf8'));\"",
+    "bundle": "npx esbuild dist/main.js --bundle --outfile=code.js --format=iife --target=es2017 --minify",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "watch": "npx esbuild src/main.ts --bundle --outfile=code.js --format=iife --target=es2017 --watch"

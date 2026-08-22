@@ -1,16 +1,55 @@
 // Gerador de código Lua MTA a partir de nós Figma
 import { NodeInfo, FillInfo, ColorInfo, ConversionConfig, ConversionResult } from './types';
 
-// Função auxiliar para converter para inteiro
-function toInt(n: number): number {
-  return Math.round(n);
+// Mapeamento de fonts Figma → MTA nativas
+// MTA possui: default, default-bold, clear, arial, sans, pricedown, bankgothic, diploma, beckett
+const FONT_MAP: Record<string, string> = {
+  'inter': 'default',
+  'roboto': 'default',
+  'open sans': 'default',
+  'lato': 'default',
+  'montserrat': 'default',
+  'poppins': 'default',
+  'nunito': 'default',
+  'raleway': 'default',
+  'work sans': 'default',
+  'dm sans': 'default',
+  'source sans': 'default',
+  'noto sans': 'default',
+  'ubuntu': 'default',
+  'helvetica': 'default',
+  'arial': 'arial',
+  'sans-serif': 'default',
+  'times': 'diploma',
+  'georgia': 'diploma',
+  'playfair': 'diploma',
+  'merriweather': 'diploma',
+  'serif': 'diploma',
+  'fira code': 'default',
+  'source code': 'default',
+  'consolas': 'default',
+  'monospace': 'default',
+  'bebas neue': 'pricedown',
+  'oswald': 'bankgothic',
+  'condensed': 'bankgothic',
+  'impact': 'bankgothic',
+};
+
+function mapFontToMTA(fontName: string): string {
+  const lower = fontName.toLowerCase();
+  if (FONT_MAP[lower]) return FONT_MAP[lower];
+  for (const [key, value] of Object.entries(FONT_MAP)) {
+    if (lower.includes(key)) return value;
+  }
+  if (lower.includes('bold') || lower.includes('black') || lower.includes('heavy')) return 'bankgothic';
+  if (lower.includes('light') || lower.includes('thin')) return 'clear';
+  return 'default';
 }
 
-// Função auxiliar para converter cor
+function toInt(n: number): number { return Math.round(n); }
+
 function toColor(color: ColorInfo | undefined, opacity: number = 1): string {
-  if (!color) {
-    return '255, 255, 255, 255';
-  }
+  if (!color) return '255, 255, 255, 255';
   const r = Math.round(color.r * 255);
   const g = Math.round(color.g * 255);
   const b = Math.round(color.b * 255);
@@ -18,27 +57,45 @@ function toColor(color: ColorInfo | undefined, opacity: number = 1): string {
   return `${r}, ${g}, ${b}, ${a}`;
 }
 
-// Função para sanitizar nome de arquivo
 function sanitizeFileName(name: string): string {
-  // Substituir espaços por underscores
   let sanitized = name.replace(/\s/g, '_');
-  // Remover caracteres não alfanuméricos exceto underscore, hífen e ponto
   sanitized = sanitized.replace(/[^\w\-.]/g, '');
   return sanitized;
 }
 
-// Função para extrair informações de um nó Figma
-export function extractNodeInfo(node: SceneNode): NodeInfo | null {
-  if (!node.visible) {
-    return null;
+function mapAlignH(align: string | undefined): string {
+  switch (align) {
+    case 'LEFT': return 'left';
+    case 'CENTER': return 'center';
+    case 'RIGHT': return 'right';
+    default: return 'left';
   }
+}
 
+function mapAlignV(align: string | undefined): string {
+  switch (align) {
+    case 'TOP': return 'top';
+    case 'CENTER': return 'center';
+    case 'BOTTOM': return 'bottom';
+    default: return 'top';
+  }
+}
+
+export function extractNodeInfo(node: SceneNode): NodeInfo | null {
+  if (!node.visible) return null;
+  // Usar absoluteTransform quando disponível (posição absoluta no canvas, mais preciso para grupos)
+  let absX = node.x;
+  let absY = node.y;
+  if ('absoluteTransform' in node && node.absoluteTransform) {
+    absX = node.absoluteTransform[0][2];
+    absY = node.absoluteTransform[1][2];
+  }
   const info: NodeInfo = {
     id: node.id,
     name: node.name,
     type: node.type,
-    x: node.x,
-    y: node.y,
+    x: absX,
+    y: absY,
     width: node.width,
     height: node.height,
     visible: node.visible,
@@ -46,8 +103,6 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
     cornerRadius: 0,
     opacity: 1,
   };
-
-  // Extrair fills
   if ('fills' in node && Array.isArray(node.fills)) {
     const fills = node.fills as Paint[];
     for (const fill of fills) {
@@ -55,36 +110,17 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
         const solidPaint = fill as SolidPaint;
         info.fills.push({
           type: 'SOLID',
-          color: {
-            r: solidPaint.color.r,
-            g: solidPaint.color.g,
-            b: solidPaint.color.b,
-            a: solidPaint.opacity || 1,
-          },
+          color: { r: solidPaint.color.r, g: solidPaint.color.g, b: solidPaint.color.b, a: solidPaint.opacity || 1 },
           opacity: solidPaint.opacity || 1,
           visible: solidPaint.visible !== false,
         });
       } else if (fill.type === 'IMAGE') {
-        info.fills.push({
-          type: 'IMAGE',
-          opacity: fill.opacity || 1,
-          visible: fill.visible !== false,
-        });
+        info.fills.push({ type: 'IMAGE', opacity: fill.opacity || 1, visible: fill.visible !== false });
       }
     }
   }
-
-  // Extrair corner radius
-  if ('cornerRadius' in node && typeof node.cornerRadius === 'number') {
-    info.cornerRadius = node.cornerRadius;
-  }
-
-  // Extrair opacidade
-  if ('opacity' in node && typeof node.opacity === 'number') {
-    info.opacity = node.opacity;
-  }
-
-  // Extrair propriedades de texto
+  if ('cornerRadius' in node && typeof node.cornerRadius === 'number') info.cornerRadius = node.cornerRadius;
+  if ('opacity' in node && typeof node.opacity === 'number') info.opacity = node.opacity;
   if (node.type === 'TEXT') {
     const textNode = node as TextNode;
     info.characters = textNode.characters;
@@ -93,11 +129,10 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
     info.textAlignHorizontal = textNode.textAlignHorizontal;
     info.textAlignVertical = textNode.textAlignVertical;
   }
-
   return info;
 }
 
-// Função para gerar código Lua completo
+// Gera código Lua completo — adaptativo (centrado + escala proporcional)
 export function generateLuaCode(
   nodes: NodeInfo[],
   config: ConversionConfig,
@@ -107,130 +142,102 @@ export function generateLuaCode(
   const addedCalls = new Set<string>();
   let requiresRounded = false;
 
-  // Processar cada nó
   for (const node of nodes) {
-    // Pular Background
     if (
       node.name.toLowerCase() === config.backgroundName.toLowerCase() ||
       node.name.toLowerCase() === 'background' ||
       node.name.toLowerCase() === 'background_image'
-    ) {
-      continue;
-    }
+    ) continue;
 
-    // Processar texto
+    // TEXT
     if (node.type === 'TEXT') {
       const text = node.characters || node.name;
       let color = '255, 255, 255, 255';
-
-      if (node.fills.length > 0 && node.fills[0].color) {
-        color = toColor(node.fills[0].color, node.fills[0].opacity);
-      }
-
-      // Escapar aspas e normalizar espaços
-      const escapedText = text
-        .replace(/"/g, '\\"')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      const call = `dxDrawText("${escapedText}", x*${toInt(node.x)}, y*${toInt(node.y)}, x*${toInt(node.width)}, y*${toInt(node.height)}, tocolor(${color}), x*2.0, "default", "left", "top", false, false, false, true, false)`;
-
-      if (!addedCalls.has(call)) {
-        drawCalls.push(call);
-        addedCalls.add(call);
-      }
+      if (node.fills.length > 0 && node.fills[0].color) color = toColor(node.fills[0].color, node.fills[0].opacity);
+      const fontMTA = node.fontName ? mapFontToMTA(node.fontName) : 'default';
+      const alignH = mapAlignH(node.textAlignHorizontal);
+      const alignV = mapAlignV(node.textAlignVertical);
+      const escapedText = text.replace(/"/g, '\\"').replace(/\s+/g, ' ').trim();
+      const fontSize = node.fontSize ? Math.round(node.fontSize) : 12;
+      const scale = fontSize / 24;
+      const call = `dxDrawText("${escapedText}", ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y)}, ox + zoom*${toInt(node.x + node.width)}, oy + zoom*${toInt(node.y + node.height)}, tocolor(${color}), zoom*${scale.toFixed(2)}, "${fontMTA}", "${alignH}", "${alignV}", false, false, false, true, false)`;
+      if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
       continue;
     }
 
-    // Processar imagens
+    // IMAGE
     const imageFill = node.fills.find((f) => f.type === 'IMAGE');
     if (imageFill) {
       const safeName = sanitizeFileName(node.name);
-      const imagePath = `assets/images/${safeName}.png`;
-      const call = `dxDrawImage(x*${toInt(node.x)}, y*${toInt(node.y)}, x*${toInt(node.width)}, y*${toInt(node.height)}, "${imagePath}", 0, 0, 0, tocolor(255, 255, 255, 255), false)`;
-
-      if (!addedCalls.has(call)) {
-        drawCalls.push(call);
-        addedCalls.add(call);
-      }
+      const call = `dxDrawImage(ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y)}, zoom*${toInt(node.width)}, zoom*${toInt(node.height)}, "assets/images/${safeName}.png", 0, 0, 0, tocolor(255, 255, 255, 255), false)`;
+      if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
       continue;
     }
 
-    // Processar formas (retângulos, etc)
-    if (node.fills.length === 0) {
-      continue;
-    }
-
+    // SHAPES (retângulos)
+    if (node.fills.length === 0) continue;
     const fill = node.fills[0];
-    if (!fill.visible || fill.type === 'NONE') {
-      continue;
-    }
-
-    if (!fill.color) {
-      continue;
-    }
-
+    if (!fill.visible || fill.type === 'NONE' || !fill.color) continue;
     const color = toColor(fill.color, fill.opacity);
     const radius = toInt(node.cornerRadius);
-
     if (radius > 0) {
       requiresRounded = true;
-      const call = `dxDrawRoundedRectangle(x*${toInt(node.x)}, y*${toInt(node.y)}, x*${toInt(node.width)}, y*${toInt(node.height)}, tocolor(${color}), ${radius})`;
-
-      if (!addedCalls.has(call)) {
-        drawCalls.push(call);
-        addedCalls.add(call);
-      }
+      const call = `dxDrawRoundedRectangle(ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y)}, zoom*${toInt(node.width)}, zoom*${toInt(node.height)}, tocolor(${color}), zoom*${radius})`;
+      if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
     } else {
-      const call = `dxDrawRectangle(x*${toInt(node.x)}, y*${toInt(node.y)}, x*${toInt(node.width)}, y*${toInt(node.height)}, tocolor(${color}))`;
-
-      if (!addedCalls.has(call)) {
-        drawCalls.push(call);
-        addedCalls.add(call);
-      }
+      const call = `dxDrawRectangle(ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y)}, zoom*${toInt(node.width)}, zoom*${toInt(node.height)}, tocolor(${color}))`;
+      if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
     }
   }
 
-  // Construir código Lua
   const luaLines: string[] = [];
-
-  // Cabeçalho com informações
   luaLines.push(
+    '-- ========================================',
     '-- Conversor de Figma para Lua MTA',
+    '-- Versão Beta Oficial - 22/08/2026',
     '-- Gerado automaticamente pelo plugin Figma Convert Lua',
-    '-- Se o seu projeto tiver imagens, certifique-se de que elas estão baixadas na pasta assets e exportadas no meta.xml!',
-    '-- ECLIPSE não está disponivel nessa versão então evite usar, Vectory pode vim todo preto, ajuste conforme necessário!',
+    '-- ========================================',
     '',
-    '-- Agradecimento especial aos lendários: SiiLVa & Baron_Scr - Vocês são brabos demais!',
-    '-- Versão 2025 - Gerado automaticamente pelo Figma Convert Lua. | Versão BETA Pode ocorrer bugs em alguns projetos!',
+    '-- Créditos: https://x.com/@SrTermax',
+    '-- Agradecimento especial: SiiLVa & Baron_Scr',
+    '',
+    '-- NOTA: Eclipse não está disponível nessa versão.',
+    '-- Vectory pode vir todo preto, ajuste conforme necessário.',
+    '-- Se o seu projeto tiver imagens, certifique-se de que',
+    '-- elas estão na pasta assets e exportadas no meta.xml.',
+    '',
+    '-- ========================================',
+    '-- SISTEMA DE ESCALA ADAPTATIVA:',
+    '-- Design: ' + config.resW + 'x' + config.resH,
+    '-- zoom  = math.min(sW/resW, sH/resH)  (mantém proporções)',
+    '-- ox,oy = offset para centralizar na tela',
+    '-- Compatível com qualquer resolução do jogador.',
+    '-- ========================================',
     '',
     ''
   );
 
-  // Variáveis principais
+  // Variáveis principais — adaptativa (aspect ratio preservado, centralizado)
   luaLines.push(
     'local sW, sH = guiGetScreenSize()',
     'local isOpen = true',
     `local resW, resH = ${config.resW}, ${config.resH}`,
-    'local x, y = sW/resW, sH/resH',
+    'local zoom = math.min(sW/resW, sH/resH)',
+    'local ox = (sW - resW*zoom) / 2',
+    'local oy = (sH - resH*zoom) / 2',
     ''
   );
 
-  // Função de renderização
   luaLines.push('function onClientRender_FigmaConvertMTA()');
-  for (const call of drawCalls) {
-    luaLines.push('\t' + call);
-  }
+  for (const call of drawCalls) luaLines.push('\t' + call);
   luaLines.push('end', '');
 
-  // Event handler
   luaLines.push(
     'if isOpen then',
     '\taddEventHandler("onClientPreRender", root, onClientRender_FigmaConvertMTA)',
     'end'
   );
 
-  // Adicionar função de retângulo arredondado se necessário
   if (requiresRounded) {
     luaLines.push(
       '',
@@ -257,14 +264,18 @@ export function generateLuaCode(
   return luaLines.join('\n');
 }
 
-// Função para gerar meta.xml
-export function generateMetaXML(imageNames: string[]): string {
-  const fileEntries = imageNames.map(
-    (name) => `  <file src="assets/images/${name}" />`
-  );
+export function extractUniqueFonts(nodes: NodeInfo[]): string[] {
+  const uniqueFonts = new Set<string>();
+  for (const node of nodes) if (node.type === 'TEXT' && node.fontName) uniqueFonts.add(node.fontName);
+  return Array.from(uniqueFonts);
+}
 
+export function generateMetaXML(imageNames: string[], fontNames: string[] = []): string {
+  const fileEntries: string[] = [];
+  for (const name of imageNames) fileEntries.push(`  <file src="assets/images/${name}" />`);
+  // Fonts: NÃO incluir TTFs inválidos; usuário adiciona manualmente se quiser dxCreateFont
+  // Apenas documentar no meta.xml se quiser
   const files = fileEntries.length > 0 ? '\n' + fileEntries.join('\n') : '';
-
   return `<meta>
   <info name="ProjetoGerado" author="Figma Convert To Lua - SrTermax" version="1.0" type="script" />
   <script src="ProjetoGerado.lua" type="client" />${files}
