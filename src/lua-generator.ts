@@ -1,49 +1,49 @@
 // Gerador de código Lua MTA a partir de nós Figma
 import { NodeInfo, FillInfo, ColorInfo, ConversionConfig, ConversionResult } from './types';
 
-// Mapeamento de fonts Figma → MTA nativas
+// Mapeamento de fonts Figma → MTA nativas + fator de escala Y (altura da font MTA vs Figma)
 // MTA possui: default, default-bold, clear, arial, sans, pricedown, bankgothic, diploma, beckett
-const FONT_MAP: Record<string, string> = {
-  'inter': 'default',
-  'roboto': 'default',
-  'open sans': 'default',
-  'lato': 'default',
-  'montserrat': 'default',
-  'poppins': 'default',
-  'nunito': 'default',
-  'raleway': 'default',
-  'work sans': 'default',
-  'dm sans': 'default',
-  'source sans': 'default',
-  'noto sans': 'default',
-  'ubuntu': 'default',
-  'helvetica': 'default',
-  'arial': 'arial',
-  'sans-serif': 'default',
-  'times': 'diploma',
-  'georgia': 'diploma',
-  'playfair': 'diploma',
-  'merriweather': 'diploma',
-  'serif': 'diploma',
-  'fira code': 'default',
-  'source code': 'default',
-  'consolas': 'default',
-  'monospace': 'default',
-  'bebas neue': 'pricedown',
-  'oswald': 'bankgothic',
-  'condensed': 'bankgothic',
-  'impact': 'bankgothic',
+const FONT_CONFIG: Record<string, { mta: string; yScale: number }> = {
+  'inter': { mta: 'default', yScale: 1.15 },
+  'roboto': { mta: 'default', yScale: 1.15 },
+  'open sans': { mta: 'default', yScale: 1.15 },
+  'lato': { mta: 'default', yScale: 1.15 },
+  'montserrat': { mta: 'default', yScale: 1.10 },
+  'poppins': { mta: 'default', yScale: 1.10 },
+  'nunito': { mta: 'default', yScale: 1.15 },
+  'raleway': { mta: 'default', yScale: 1.10 },
+  'work sans': { mta: 'default', yScale: 1.15 },
+  'dm sans': { mta: 'default', yScale: 1.10 },
+  'source sans': { mta: 'default', yScale: 1.15 },
+  'noto sans': { mta: 'default', yScale: 1.15 },
+  'ubuntu': { mta: 'default', yScale: 1.15 },
+  'helvetica': { mta: 'default', yScale: 1.15 },
+  'arial': { mta: 'arial', yScale: 1.20 },
+  'sans-serif': { mta: 'default', yScale: 1.15 },
+  'times': { mta: 'diploma', yScale: 1.05 },
+  'georgia': { mta: 'diploma', yScale: 1.05 },
+  'playfair': { mta: 'diploma', yScale: 1.05 },
+  'merriweather': { mta: 'diploma', yScale: 1.05 },
+  'serif': { mta: 'diploma', yScale: 1.05 },
+  'fira code': { mta: 'default', yScale: 1.15 },
+  'source code': { mta: 'default', yScale: 1.15 },
+  'consolas': { mta: 'default', yScale: 1.15 },
+  'monospace': { mta: 'default', yScale: 1.15 },
+  'bebas neue': { mta: 'pricedown', yScale: 1.30 },
+  'oswald': { mta: 'bankgothic', yScale: 1.25 },
+  'condensed': { mta: 'bankgothic', yScale: 1.25 },
+  'impact': { mta: 'bankgothic', yScale: 1.30 },
 };
 
-function mapFontToMTA(fontName: string): string {
+function getFontConfig(fontName: string): { mta: string; yScale: number } {
   const lower = fontName.toLowerCase();
-  if (FONT_MAP[lower]) return FONT_MAP[lower];
-  for (const [key, value] of Object.entries(FONT_MAP)) {
+  if (FONT_CONFIG[lower]) return FONT_CONFIG[lower];
+  for (const [key, value] of Object.entries(FONT_CONFIG)) {
     if (lower.includes(key)) return value;
   }
-  if (lower.includes('bold') || lower.includes('black') || lower.includes('heavy')) return 'bankgothic';
-  if (lower.includes('light') || lower.includes('thin')) return 'clear';
-  return 'default';
+  if (lower.includes('bold') || lower.includes('black') || lower.includes('heavy')) return { mta: 'bankgothic', yScale: 1.25 };
+  if (lower.includes('light') || lower.includes('thin')) return { mta: 'clear', yScale: 1.15 };
+  return { mta: 'default', yScale: 1.15 };
 }
 
 function toInt(n: number): number { return Math.round(n); }
@@ -149,18 +149,21 @@ export function generateLuaCode(
       node.name.toLowerCase() === 'background_image'
     ) continue;
 
-    // TEXT
+    // TEXT — compensação de escala de font Figma → MTA
     if (node.type === 'TEXT') {
       const text = node.characters || node.name;
       let color = '255, 255, 255, 255';
       if (node.fills.length > 0 && node.fills[0].color) color = toColor(node.fills[0].color, node.fills[0].opacity);
-      const fontMTA = node.fontName ? mapFontToMTA(node.fontName) : 'default';
+      const fontConfig = node.fontName ? getFontConfig(node.fontName) : { mta: 'default', yScale: 1.15 };
       const alignH = mapAlignH(node.textAlignHorizontal);
       const alignV = mapAlignV(node.textAlignVertical);
       const escapedText = text.replace(/"/g, '\\"').replace(/\s+/g, ' ').trim();
+      // Compensar tamanho: font MTA base é menor que Figma — aplicar yScale na escala
       const fontSize = node.fontSize ? Math.round(node.fontSize) : 12;
-      const scale = fontSize / 24;
-      const call = `dxDrawText("${escapedText}", ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y)}, ox + zoom*${toInt(node.x + node.width)}, oy + zoom*${toInt(node.y + node.height)}, tocolor(${color}), zoom*${scale.toFixed(2)}, "${fontMTA}", "${alignH}", "${alignV}", false, false, false, true, false)`;
+      const scale = (fontSize / 16) * fontConfig.yScale;
+      // Compensar altura vertical para alinhar baseline (font MTA tem baseline diferente)
+      const yOffset = Math.round((fontSize * (fontConfig.yScale - 1)) / 2);
+      const call = `dxDrawText("${escapedText}", ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y - yOffset)}, ox + zoom*${toInt(node.x + node.width)}, oy + zoom*${toInt(node.y + node.height - yOffset)}, tocolor(${color}), zoom*${scale.toFixed(2)}, "${fontConfig.mta}", "${alignH}", "${alignV}", false, false, false, true, false)`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
       continue;
     }
