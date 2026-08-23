@@ -89,6 +89,17 @@ export function isShapeNode(node: NodeInfo): boolean {
   );
 }
 
+// Nós que devem ser exportados como imagem (PNG) e desenhados com dxDrawImage.
+// Inclui retângulos com apenas stroke (sem fill), que eram descartados.
+export function needsImageExport(node: NodeInfo): boolean {
+  return !!(
+    node.fills.some((f) => f.type === 'IMAGE') ||
+    (node.hasGradient && !node.hasChildren && node.type !== 'TEXT') ||
+    (isShapeNode(node) && (node.hasFill || node.hasStroke)) ||
+    (node.type === 'RECTANGLE' && node.hasStroke && node.fills.length === 0)
+  );
+}
+
 function mapAlignH(align: string | undefined): string {
   switch (align) {
     case 'LEFT': return 'left';
@@ -297,9 +308,7 @@ export function generateLuaCode(
     // Imagens e formas não retangulares são desenhadas como imagem.
     // O exportAsync do Figma já aplica a opacidade do nó e do fill no PNG,
     // então o desenho usa alpha total (a transparência já está na imagem).
-    const imageFill = node.fills.find((f) => f.type === 'IMAGE');
-    const gradientLeaf = node.hasGradient && !node.hasChildren;
-    if (imageFill || gradientLeaf || (isShapeNode(node) && (node.hasFill || node.hasStroke))) {
+    if (needsImageExport(node)) {
       const fileName = imageFiles.get(node.id) || (sanitizeFileName(node.name) + '.png');
       // Retângulo em espaço de página (inclui rotação/escala) para tamanho e posição corretos
       const ix = node.imgX !== undefined ? node.imgX : node.x;

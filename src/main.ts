@@ -1,5 +1,5 @@
 // Entry point do plugin Conversor de Figma para Lua MTA
-import { extractNodeInfo, generateLuaCode, generateMetaXML, extractUniqueFonts, isShapeNode, sanitizeFileName } from './lua-generator';
+import { extractNodeInfo, generateLuaCode, generateMetaXML, extractUniqueFonts, needsImageExport, sanitizeFileName } from './lua-generator';
 import { NodeInfo, ConversionConfig, ConversionResult, ColorInfo } from './types';
 
 // Mostrar UI do plugin
@@ -71,11 +71,7 @@ async function convertSelection(backgroundName: string) {
     };
 
     // Coletar imagens para exportar (IMAGES e formas não retangulares)
-    const imageNodes = allNodes.filter((n) =>
-      n.fills.some((f) => f.type === 'IMAGE') ||
-      (n.hasGradient && !n.hasChildren && n.type !== 'TEXT') ||
-      (isShapeNode(n) && (n.hasFill || n.hasStroke))
-    );
+    const imageNodes = allNodes.filter((n) => needsImageExport(n));
 
     // Nomes de arquivo únicos para evitar conflitos entre nós com o mesmo nome
     const imageFileMap = new Map<string, string>();
