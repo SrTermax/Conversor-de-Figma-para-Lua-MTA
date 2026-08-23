@@ -1,7 +1,7 @@
 {
   "name": "Conversor-de-Figma-para-Lua-MTA",
-  "version": "1.0.0",
-  "description": "Seu plugin do Figma",
+  "version": "1.0.1",
+  "description": "Converte projetos figma em código LUA",
   "main": "code.js",
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run bundle",
