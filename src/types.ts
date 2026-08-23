@@ -17,6 +17,15 @@ export interface NodeInfo {
   textAlignHorizontal?: string;
   textAlignVertical?: string;
   opacity: number;
+  hasFill?: boolean;
+  hasStroke?: boolean;
+  hasGradient?: boolean;
+  hasChildren?: boolean;
+  imgX?: number;
+  imgY?: number;
+  imgW?: number;
+  imgH?: number;
+  transformScale?: number;
   effects?: EffectInfo[];
 }
 
@@ -43,6 +52,8 @@ export interface EffectInfo {
 
 export interface ConversionConfig {
   backgroundName: string;
+  backgroundId?: string;
+  backgroundColor?: ColorInfo;
   resW: number;
   resH: number;
 }

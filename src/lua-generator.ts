@@ -45,19 +45,43 @@ function getFontConfig(fontName: string): { mta: string; yScale: number } {
 
 function toInt(n: number): number { return Math.round(n); }
 
+// Assa a opacidade do fill em uma cor sólida composta sobre a cor do background.
+// Assim, um fill semi-transparente aparece no jogo como no Figma (sem depender
+// do fundo do jogo). A opacidade do nó continua sendo transparência real.
+function bakeColor(color: ColorInfo, bg: ColorInfo): ColorInfo {
+  const a = typeof color.a === 'number' ? color.a : 1;
+  return {
+    r: color.r * a + bg.r * (1 - a),
+    g: color.g * a + bg.g * (1 - a),
+    b: color.b * a + bg.b * (1 - a),
+    a: 1,
+  };
+}
+
 function toColor(color: ColorInfo | undefined, opacity: number = 1): string {
   if (!color) return '255, 255, 255, 255';
   const r = Math.round(color.r * 255);
   const g = Math.round(color.g * 255);
   const b = Math.round(color.b * 255);
-  const a = Math.round((color.a || 1) * opacity * 255);
+  const a = Math.round((typeof color.a === 'number' ? color.a : 1) * (typeof opacity === 'number' ? opacity : 1) * 255);
   return `${r}, ${g}, ${b}, ${a}`;
 }
 
-function sanitizeFileName(name: string): string {
+export function sanitizeFileName(name: string): string {
   let sanitized = name.replace(/\s/g, '_');
   sanitized = sanitized.replace(/[^\w\-.]/g, '');
   return sanitized;
+}
+
+// Formas não retangulares são exportadas como imagem (preservam formato e ícones)
+export function isShapeNode(node: NodeInfo): boolean {
+  return (
+    node.type === 'VECTOR' ||
+    node.type === 'ELLIPSE' ||
+    node.type === 'POLYGON' ||
+    node.type === 'STAR' ||
+    node.type === 'LINE'
+  );
 }
 
 function mapAlignH(align: string | undefined): string {
@@ -78,14 +102,42 @@ function mapAlignV(align: string | undefined): string {
   }
 }
 
+// Retângulo de desenho em espaço de página, considerando rotação/escala do nó.
+// O exportAsync do Figma gera a imagem já rotacionada no tamanho desse retângulo,
+// então desenhar no bbox local (node.width/height) esmagaria o elemento.
+function computeDrawRect(
+  node: SceneNode,
+  fallbackX: number,
+  fallbackY: number
+): { x: number; y: number; w: number; h: number } {
+  const w = node.width;
+  const h = node.height;
+  if ('absoluteTransform' in node && node.absoluteTransform) {
+    const m = node.absoluteTransform;
+    const a = m[0][0], c = m[0][1], e = m[0][2];
+    const b = m[1][0], d = m[1][1], f = m[1][2];
+    const xs = [e, e + a * w, e + c * h, e + a * w + c * h];
+    const ys = [f, f + b * w, f + d * h, f + b * w + d * h];
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+  return { x: fallbackX, y: fallbackY, w, h };
+}
+
 export function extractNodeInfo(node: SceneNode): NodeInfo | null {
   if (!node.visible) return null;
   let absX = node.x;
   let absY = node.y;
+  let transformScale = 1;
   if ('absoluteTransform' in node && node.absoluteTransform) {
     absX = node.absoluteTransform[0][2];
     absY = node.absoluteTransform[1][2];
+    transformScale = Math.hypot(node.absoluteTransform[0][0], node.absoluteTransform[1][0]);
   }
+  const drawRect = computeDrawRect(node, absX, absY);
   const info: NodeInfo = {
     id: node.id,
     name: node.name,
@@ -98,22 +150,59 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
     fills: [],
     cornerRadius: 0,
     opacity: 1,
+    imgX: drawRect.x,
+    imgY: drawRect.y,
+    imgW: drawRect.w,
+    imgH: drawRect.h,
+    transformScale,
   };
+  if ('children' in node) {
+    info.hasChildren = (node as ChildrenMixin).children.length > 0;
+  }
   if ('fills' in node && Array.isArray(node.fills)) {
     const fills = node.fills as Paint[];
+    info.hasFill = fills.some((f) => f.visible !== false && (f as { type: string }).type !== 'NONE');
     for (const fill of fills) {
       if (fill.type === 'SOLID' && 'color' in fill) {
         const solidPaint = fill as SolidPaint;
+        const fillOpacity = typeof solidPaint.opacity === 'number' ? solidPaint.opacity : 1;
         info.fills.push({
           type: 'SOLID',
-          color: { r: solidPaint.color.r, g: solidPaint.color.g, b: solidPaint.color.b, a: solidPaint.opacity || 1 },
-          opacity: solidPaint.opacity || 1,
+          color: { r: solidPaint.color.r, g: solidPaint.color.g, b: solidPaint.color.b, a: fillOpacity },
+          opacity: fillOpacity,
           visible: solidPaint.visible !== false,
         });
       } else if (fill.type === 'IMAGE') {
-        info.fills.push({ type: 'IMAGE', opacity: fill.opacity || 1, visible: fill.visible !== false });
+        info.fills.push({
+          type: 'IMAGE',
+          opacity: typeof fill.opacity === 'number' ? fill.opacity : 1,
+          visible: fill.visible !== false,
+        });
+      } else if (fill.visible !== false && (fill as { type: string }).type !== 'NONE') {
+        // Gradiente/padrão: folhas são exportadas como imagem (fidelidade total).
+        // Containers recebem aproximação sólida com a primeira cor como fallback.
+        info.hasGradient = true;
+        if (
+          info.hasChildren &&
+          'gradientStops' in fill &&
+          Array.isArray((fill as GradientPaint).gradientStops) &&
+          (fill as GradientPaint).gradientStops.length > 0
+        ) {
+          const stop = (fill as GradientPaint).gradientStops[0].color;
+          const fillOpacity = typeof fill.opacity === 'number' ? fill.opacity : 1;
+          info.fills.push({
+            type: 'SOLID',
+            color: { r: stop.r, g: stop.g, b: stop.b, a: fillOpacity },
+            opacity: fillOpacity,
+            visible: true,
+          });
+        }
       }
     }
+  }
+  if ('strokes' in node && Array.isArray(node.strokes)) {
+    const strokes = node.strokes as Paint[];
+    info.hasStroke = strokes.some((s) => s.visible !== false && (s as { type: string }).type !== 'NONE');
   }
   if ('cornerRadius' in node && typeof node.cornerRadius === 'number') info.cornerRadius = node.cornerRadius;
   if ('opacity' in node && typeof node.opacity === 'number') info.opacity = node.opacity;
@@ -131,39 +220,57 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
 export function generateLuaCode(
   nodes: NodeInfo[],
   config: ConversionConfig,
-  imageNames: string[]
+  imageFiles: Map<string, string>
 ): string {
   const drawCalls: string[] = [];
   const addedCalls = new Set<string>();
   let requiresRounded = false;
 
   for (const node of nodes) {
-    if (
-      node.name.toLowerCase() === config.backgroundName.toLowerCase() ||
-      node.name.toLowerCase() === 'background' ||
-      node.name.toLowerCase() === 'background_image'
-    ) continue;
+    if (config.backgroundId && node.id === config.backgroundId) continue;
 
     if (node.type === 'TEXT') {
       const text = node.characters || node.name;
       let color = '255, 255, 255, 255';
-      if (node.fills.length > 0 && node.fills[0].color) color = toColor(node.fills[0].color, node.fills[0].opacity);
+      if (node.fills.length > 0 && node.fills[0].color) color = toColor(node.fills[0].color, node.opacity);
       const fontConfig = node.fontName ? getFontConfig(node.fontName) : { mta: 'default', yScale: 1.15 };
       const alignH = mapAlignH(node.textAlignHorizontal);
       const alignV = mapAlignV(node.textAlignVertical);
-      const escapedText = text.replace(/"/g, '\\"').replace(/\s+/g, ' ').trim();
-      const fontSize = node.fontSize ? Math.round(node.fontSize) : 12;
+      // Preserva quebras de linha como \n (suportado pelo dxDrawText do MTA)
+      const escapedText = text
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .trim()
+        .replace(/\n/g, '\\n')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/"/g, '\\"');
+      // Escala do nó (grupo ampliado/reduzido) aplicada ao tamanho da fonte
+      const textScale = node.transformScale || 1;
+      const fontSize = Math.round((node.fontSize ? node.fontSize : 12) * textScale);
       const scale = (fontSize / 16) * fontConfig.yScale;
       const yOffset = Math.round((fontSize * (fontConfig.yScale - 1)) / 2);
-      const call = `dxDrawText("${escapedText}", ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y - yOffset)}, ox + zoom*${toInt(node.x + node.width)}, oy + zoom*${toInt(node.y + node.height - yOffset)}, tocolor(${color}), zoom*${scale.toFixed(2)}, "${fontConfig.mta}", "${alignH}", "${alignV}", false, false, false, true, false)`;
+      const tx = node.imgX !== undefined ? node.imgX : node.x;
+      const ty = node.imgY !== undefined ? node.imgY : node.y;
+      const tw = node.imgW !== undefined ? node.imgW : node.width;
+      const th = node.imgH !== undefined ? node.imgH : node.height;
+      const call = `dxDrawText("${escapedText}", ox + zoom*${toInt(tx)}, oy + zoom*${toInt(ty - yOffset)}, ox + zoom*${toInt(tx + tw)}, oy + zoom*${toInt(ty + th - yOffset)}, tocolor(${color}), zoom*${scale.toFixed(2)}, "${fontConfig.mta}", "${alignH}", "${alignV}", false, false, false, true, false)`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
       continue;
     }
 
+    // Imagens e formas não retangulares são desenhadas como imagem.
+    // O exportAsync do Figma já aplica a opacidade do nó e do fill no PNG,
+    // então o desenho usa alpha total (a transparência já está na imagem).
     const imageFill = node.fills.find((f) => f.type === 'IMAGE');
-    if (imageFill) {
-      const safeName = sanitizeFileName(node.name);
-      const call = `dxDrawImage(ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y)}, zoom*${toInt(node.width)}, zoom*${toInt(node.height)}, "assets/images/${safeName}.png", 0, 0, 0, tocolor(255, 255, 255, 255), false)`;
+    const gradientLeaf = node.hasGradient && !node.hasChildren;
+    if (imageFill || gradientLeaf || (isShapeNode(node) && (node.hasFill || node.hasStroke))) {
+      const fileName = imageFiles.get(node.id) || (sanitizeFileName(node.name) + '.png');
+      // Retângulo em espaço de página (inclui rotação/escala) para tamanho e posição corretos
+      const ix = node.imgX !== undefined ? node.imgX : node.x;
+      const iy = node.imgY !== undefined ? node.imgY : node.y;
+      const iw = node.imgW !== undefined ? node.imgW : node.width;
+      const ih = node.imgH !== undefined ? node.imgH : node.height;
+      const call = `dxDrawImage(ox + zoom*${toInt(ix)}, oy + zoom*${toInt(iy)}, zoom*${toInt(iw)}, zoom*${toInt(ih)}, "assets/images/${fileName}", 0, 0, 0, tocolor(255, 255, 255, 255), false)`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
       continue;
     }
@@ -171,14 +278,24 @@ export function generateLuaCode(
     if (node.fills.length === 0) continue;
     const fill = node.fills[0];
     if (!fill.visible || fill.type === 'NONE' || !fill.color) continue;
-    const color = toColor(fill.color, fill.opacity);
-    const radius = toInt(node.cornerRadius);
+    // Fill semi-transparente é composto sobre a cor do background (como no Figma).
+    // Fill 0% permanece invisível (a=0 não entra no bake).
+    let fillColor = fill.color;
+    if (config.backgroundColor && typeof fillColor.a === 'number' && fillColor.a > 0 && fillColor.a < 1) {
+      fillColor = bakeColor(fillColor, config.backgroundColor);
+    }
+    const color = toColor(fillColor, node.opacity);
+    const rx = node.imgX !== undefined ? node.imgX : node.x;
+    const ry = node.imgY !== undefined ? node.imgY : node.y;
+    const rw = node.imgW !== undefined ? node.imgW : node.width;
+    const rh = node.imgH !== undefined ? node.imgH : node.height;
+    const radius = Math.round((node.cornerRadius || 0) * (node.transformScale || 1));
     if (radius > 0) {
       requiresRounded = true;
-      const call = `dxDrawRoundedRectangle(ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y)}, zoom*${toInt(node.width)}, zoom*${toInt(node.height)}, tocolor(${color}), zoom*${radius})`;
+      const call = `dxDrawRoundedRectangle(ox + zoom*${toInt(rx)}, oy + zoom*${toInt(ry)}, zoom*${toInt(rw)}, zoom*${toInt(rh)}, tocolor(${color}), zoom*${radius})`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
     } else {
-      const call = `dxDrawRectangle(ox + zoom*${toInt(node.x)}, oy + zoom*${toInt(node.y)}, zoom*${toInt(node.width)}, zoom*${toInt(node.height)}, tocolor(${color}))`;
+      const call = `dxDrawRectangle(ox + zoom*${toInt(rx)}, oy + zoom*${toInt(ry)}, zoom*${toInt(rw)}, zoom*${toInt(rh)}, tocolor(${color}))`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
     }
   }
@@ -194,8 +311,6 @@ export function generateLuaCode(
     '-- Créditos: https://x.com/@SrTermax',
     '-- Agradecimento especial: SiiLVa & Baron_Scr',
     '',
-    '-- NOTA: Eclipse não está disponível nessa versão.',
-    '-- Vectory pode vir todo preto, ajuste conforme necessário.',
     '-- Se o seu projeto tiver imagens, certifique-se de que',
     '-- elas estão na pasta assets e exportadas no meta.xml.',
     '',
