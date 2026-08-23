@@ -106,17 +106,36 @@ async function convertSelection(backgroundName: string) {
         const figmaNode = await figma.getNodeByIdAsync(nodeInfo.id);
         const fileName = imageFileMap.get(nodeInfo.id);
         if (figmaNode && fileName && 'exportAsync' in figmaNode) {
+          // Ícones/objetos pequenos são exportados em 2x para ficarem nítidos no GTA,
+          // desde que não estourem o limite de 4096px da exportação do Figma
+          const exporter = figmaNode as unknown as {
+            exportAsync(settings: ExportSettingsImage): Promise<Uint8Array>;
+          };
+          const maxDim = Math.max(nodeInfo.imgW ?? nodeInfo.width, nodeInfo.imgH ?? nodeInfo.height);
+          const exportScale = nodeInfo.width < 256 && nodeInfo.height < 256 && maxDim <= 2048 ? 2 : 1;
+          let imageData: Uint8Array | undefined;
           try {
-            // Ícones/objetos pequenos são exportados em 2x para ficarem nítidos no GTA
-            const exportScale = nodeInfo.width < 256 && nodeInfo.height < 256 ? 2 : 1;
             const exportSettings: ExportSettingsImage = { format: 'PNG', suffix: '', constraint: { type: 'SCALE', value: exportScale } };
-            const imageData = await (figmaNode as any).exportAsync(exportSettings);
+            imageData = await exporter.exportAsync(exportSettings);
+          } catch (e) {
+            console.error(`Erro ao exportar ${nodeInfo.name} em ${exportScale}x:`, e);
+          }
+          // Se 2x falhar (ex: limite de 4096px), re-tenta em 1x
+          if (!imageData && exportScale > 1) {
+            try {
+              const retrySettings: ExportSettingsImage = { format: 'PNG', suffix: '', constraint: { type: 'SCALE', value: 1 } };
+              imageData = await exporter.exportAsync(retrySettings);
+            } catch (e2) {
+              console.error(`Erro ao exportar ${nodeInfo.name} em 1x:`, e2);
+            }
+          }
+          if (imageData) {
             images.push({
               name: fileName,
               data: imageData,
             });
-          } catch (e) {
-            console.error(`Erro ao exportar imagem ${nodeInfo.name}:`, e);
+          } else {
+            console.error(`Não foi possível exportar a imagem ${nodeInfo.name}`);
           }
         }
       }

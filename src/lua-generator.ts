@@ -45,6 +45,11 @@ function getFontConfig(fontName: string): { mta: string; yScale: number } {
 
 function toInt(n: number): number { return Math.round(n); }
 
+// Converte um valor 0-1 em byte hex (usado nos códigos de cor #RRGGBBAA do MTA)
+function toHexByte(n: number): string {
+  return Math.round(Math.max(0, Math.min(1, n)) * 255).toString(16).padStart(2, '0');
+}
+
 // Assa a opacidade do fill em uma cor sólida composta sobre a cor do background.
 // Assim, um fill semi-transparente aparece no jogo como no Figma (sem depender
 // do fundo do jogo). A opacidade do nó continua sendo transparência real.
@@ -209,10 +214,41 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
   if (node.type === 'TEXT') {
     const textNode = node as TextNode;
     info.characters = textNode.characters;
-    info.fontSize = textNode.fontSize as number;
-    info.fontName = (textNode.fontName as FontName).family;
-    info.textAlignHorizontal = textNode.textAlignHorizontal;
-    info.textAlignVertical = textNode.textAlignVertical;
+    if (typeof textNode.fontSize === 'number') {
+      info.fontSize = textNode.fontSize;
+    } else {
+      // fontSize mixed (linhas com tamanhos diferentes): estima pela altura do nó
+      const lineCount = info.characters ? info.characters.split('\n').length : 1;
+      info.fontSize = Math.max(1, Math.round(info.height / lineCount / 1.2));
+    }
+    if (typeof textNode.fontName === 'object' && textNode.fontName !== null) {
+      info.fontName = textNode.fontName.family;
+    }
+    if (typeof textNode.textAlignHorizontal === 'string') info.textAlignHorizontal = textNode.textAlignHorizontal;
+    if (typeof textNode.textAlignVertical === 'string') info.textAlignVertical = textNode.textAlignVertical;
+    // Cores diferentes dentro do mesmo texto (texto rico) via códigos #RRGGBB.
+    // O dxDrawText do MTA já usa colorCoded; códigos de 6 dígitos (sem alpha),
+    // pois esta versão do MTA não consome o 8º dígito e deixaria "ff" no texto.
+    if (typeof textNode.getStyledTextSegments === 'function') {
+      try {
+        const segments = textNode.getStyledTextSegments(['fills']);
+        if (segments.length > 1) {
+          let coded = '';
+          for (const seg of segments) {
+            const fill = seg.fills.find((f) => f.type === 'SOLID' && f.visible !== false && 'color' in f);
+            if (fill && 'color' in fill) {
+              const solidFill = fill as SolidPaint;
+              coded += `#${toHexByte(solidFill.color.r)}${toHexByte(solidFill.color.g)}${toHexByte(solidFill.color.b)}${seg.characters}`;
+            } else {
+              coded += seg.characters;
+            }
+          }
+          if (coded) info.characters = coded;
+        }
+      } catch (_e) {
+        // getStyledTextSegments indisponível: mantém o texto simples
+      }
+    }
   }
   return info;
 }
@@ -246,14 +282,14 @@ export function generateLuaCode(
         .replace(/"/g, '\\"');
       // Escala do nó (grupo ampliado/reduzido) aplicada ao tamanho da fonte
       const textScale = node.transformScale || 1;
-      const fontSize = Math.round((node.fontSize ? node.fontSize : 12) * textScale);
+      const fontSize = Math.round((typeof node.fontSize === 'number' ? node.fontSize : 12) * textScale);
       const scale = (fontSize / 16) * fontConfig.yScale;
       const yOffset = Math.round((fontSize * (fontConfig.yScale - 1)) / 2);
       const tx = node.imgX !== undefined ? node.imgX : node.x;
       const ty = node.imgY !== undefined ? node.imgY : node.y;
       const tw = node.imgW !== undefined ? node.imgW : node.width;
       const th = node.imgH !== undefined ? node.imgH : node.height;
-      const call = `dxDrawText("${escapedText}", ox + zoom*${toInt(tx)}, oy + zoom*${toInt(ty - yOffset)}, ox + zoom*${toInt(tx + tw)}, oy + zoom*${toInt(ty + th - yOffset)}, tocolor(${color}), zoom*${scale.toFixed(2)}, "${fontConfig.mta}", "${alignH}", "${alignV}", false, false, false, true, false)`;
+      const call = `dxDrawText("${escapedText}", ox + zoom*${toInt(tx)}, oy + zoom*${toInt(ty - yOffset)}, ox + zoom*${toInt(tx + tw)}, oy + zoom*${toInt(ty + th - yOffset)}, tocolor(${color}), zoom*${scale.toFixed(2)}, "${fontConfig.mta}", "${alignH}", "${alignV}", false, false, true, true, false)`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
       continue;
     }
@@ -270,7 +306,7 @@ export function generateLuaCode(
       const iy = node.imgY !== undefined ? node.imgY : node.y;
       const iw = node.imgW !== undefined ? node.imgW : node.width;
       const ih = node.imgH !== undefined ? node.imgH : node.height;
-      const call = `dxDrawImage(ox + zoom*${toInt(ix)}, oy + zoom*${toInt(iy)}, zoom*${toInt(iw)}, zoom*${toInt(ih)}, "assets/images/${fileName}", 0, 0, 0, tocolor(255, 255, 255, 255), false)`;
+      const call = `dxDrawImage(ox + zoom*${toInt(ix)}, oy + zoom*${toInt(iy)}, zoom*${toInt(iw)}, zoom*${toInt(ih)}, "assets/images/${fileName}", 0, 0, 0, tocolor(255, 255, 255, 255), true)`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
       continue;
     }
@@ -295,7 +331,7 @@ export function generateLuaCode(
       const call = `dxDrawRoundedRectangle(ox + zoom*${toInt(rx)}, oy + zoom*${toInt(ry)}, zoom*${toInt(rw)}, zoom*${toInt(rh)}, tocolor(${color}), zoom*${radius})`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
     } else {
-      const call = `dxDrawRectangle(ox + zoom*${toInt(rx)}, oy + zoom*${toInt(ry)}, zoom*${toInt(rw)}, zoom*${toInt(rh)}, tocolor(${color}))`;
+      const call = `dxDrawRectangle(ox + zoom*${toInt(rx)}, oy + zoom*${toInt(ry)}, zoom*${toInt(rw)}, zoom*${toInt(rh)}, tocolor(${color}), true)`;
       if (!addedCalls.has(call)) { drawCalls.push(call); addedCalls.add(call); }
     }
   }
@@ -354,15 +390,15 @@ export function generateLuaCode(
       '\tx = x + radius',
       '\ty = y + radius',
       '\tif (w >= 0) and (h >= 0) then',
-      '\t\tdxDrawRectangle(x, y, w, h, color)',
-      '\t\tdxDrawRectangle(x, y - radius, w, radius, color)',
-      '\t\tdxDrawRectangle(x, y + h, w, radius, color)',
-      '\t\tdxDrawRectangle(x - radius, y, radius, h, color)',
-      '\t\tdxDrawRectangle(x + w, y, radius, h, color)',
-      '\t\tdxDrawCircle(x, y, radius, 180, 270, color, color, 7)',
-      '\t\tdxDrawCircle(x + w, y, radius, 270, 360, color, color, 7)',
-      '\t\tdxDrawCircle(x + w, y + h, radius, 0, 90, color, color, 7)',
-      '\t\tdxDrawCircle(x, y + h, radius, 90, 180, color, color, 7)',
+      '\t\tdxDrawRectangle(x, y, w, h, color, true)',
+      '\t\tdxDrawRectangle(x, y - radius, w, radius, color, true)',
+      '\t\tdxDrawRectangle(x, y + h, w, radius, color, true)',
+      '\t\tdxDrawRectangle(x - radius, y, radius, h, color, true)',
+      '\t\tdxDrawRectangle(x + w, y, radius, h, color, true)',
+      '\t\tdxDrawCircle(x, y, radius, 180, 270, color, color, 7, 1, true)',
+      '\t\tdxDrawCircle(x + w, y, radius, 270, 360, color, color, 7, 1, true)',
+      '\t\tdxDrawCircle(x + w, y + h, radius, 0, 90, color, color, 7, 1, true)',
+      '\t\tdxDrawCircle(x, y + h, radius, 90, 180, color, color, 7, 1, true)',
       '\tend',
       'end'
     );
