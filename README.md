@@ -1,40 +1,40 @@
-Below are the steps to get your plugin running. You can also find instructions at:
+# Conversor de Figma para Lua MTA
 
-  https://www.figma.com/plugin-docs/plugin-quickstart-guide/
+Plugin Figma que converte designs em código Lua para Multi Theft Auto (MTA).
 
-This plugin template uses Typescript and NPM, two standard tools in creating JavaScript applications.
+## Instruções de Teste (Figma Community)
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+### Passo a passo para testar o plugin:
 
-  https://nodejs.org/en/download/
+1. **Acesse o plugin** na Figma Community ou instale via Figma Desktop
+2. **Abra um arquivo Figma** com elementos (retângulos, textos, imagens)
+3. **Execute o plugin**: Menu → Plugins → Conversor de Figma para Lua MTA
+4. **Configure o Background** (opcional):
+   - O campo "Nome do Background" define qual frame representa a tela padrão
+   - Se nenhum elemento estiver selecionado, todo o projeto será convertido
+5. **Clique em "CONVERTER E BAIXAR ZIP"**
+6. **Baixe o arquivo ZIP** contendo:
+   - `ProjetoGerado.lua` - Código Lua para MTA
+   - `meta.xml` - Arquivo de metadados do MTA
+   - `assets/images/` - Imagens exportadas (se houver)
 
-Next, install TypeScript using the command:
+### Funcionalidades:
 
-  npm install -g typescript
+- Conversão automática de elementos Figma para código Lua
+- Suporte a retângulos, textos, imagens e formas vetoriais
+- Escala adaptativa para qualquer resolução de tela
+- Exportação de imagens para assets
+- Geração de meta.xml para MTA
 
-Finally, in the directory of your plugin, get the latest type definitions for the plugin API by running:
+### Arquivos do Plugin:
 
-  npm install --save-dev @figma/plugin-typings
+- `manifest.json` - Configuração do plugin Figma
+- `code.js` - Código principal do plugin
+- `ui.html` - Interface do plugin
+- `src/` - Código fonte TypeScript
 
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
+### Créditos:
 
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
-
-For more information, visit https://www.typescriptlang.org/
-
-Using TypeScript requires a compiler to convert TypeScript (code.ts) into JavaScript (code.js)
-for the browser to run.
-
-We recommend writing TypeScript code using Visual Studio code:
-
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-    then select "npm: watch". You will have to do this again every time
-    you reopen Visual Studio Code.
-
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+- Autor: @SrTermax
+- Versão: 1.0.1
+- Lançamento: 22/08/2026

@@ -1,0 +1,126 @@
+{
+  "name": "Test Design for MTA Plugin",
+  "version": "1.0",
+  "document": {
+    "id": "test-doc-001",
+    "name": "Test Design",
+    "pages": [
+      {
+        "id": "page-001",
+        "name": "Main Page",
+        "children": [
+          {
+            "id": "background-001",
+            "name": "Background",
+            "type": "FRAME",
+            "width": 1920,
+            "height": 1080,
+            "fills": [
+              {
+                "type": "SOLID",
+                "color": {
+                  "r": 0.1,
+                  "g": 0.1,
+                  "b": 0.15,
+                  "a": 1
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "rect-001",
+                "name": "Panel",
+                "type": "RECTANGLE",
+                "x": 100,
+                "y": 100,
+                "width": 400,
+                "height": 300,
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": {
+                      "r": 0.2,
+                      "g": 0.2,
+                      "b": 0.3,
+                      "a": 1
+                    }
+                  }
+                ],
+                "cornerRadius": 10
+              },
+              {
+                "id": "text-001",
+                "name": "Title",
+                "type": "TEXT",
+                "x": 150,
+                "y": 120,
+                "width": 300,
+                "height": 40,
+                "characters": "MTA Plugin Test",
+                "fontSize": 24,
+                "fontName": "Inter",
+                "textAlignHorizontal": "CENTER",
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": {
+                      "r": 1,
+                      "g": 1,
+                      "b": 1,
+                      "a": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "rect-002",
+                "name": "Button",
+                "type": "RECTANGLE",
+                "x": 200,
+                "y": 200,
+                "width": 200,
+                "height": 50,
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": {
+                      "r": 0.4,
+                      "g": 0.2,
+                      "b": 0.8,
+                      "a": 1
+                    }
+                  }
+                ],
+                "cornerRadius": 5
+              },
+              {
+                "id": "text-002",
+                "name": "Button Text",
+                "type": "TEXT",
+                "x": 250,
+                "y": 210,
+                "width": 100,
+                "height": 30,
+                "characters": "Click Me",
+                "fontSize": 16,
+                "fontName": "Inter",
+                "textAlignHorizontal": "CENTER",
+                "fills": [
+                  {
+                    "type": "SOLID",
+                    "color": {
+                      "r": 1,
+                      "g": 1,
+                      "b": 1,
+                      "a": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
