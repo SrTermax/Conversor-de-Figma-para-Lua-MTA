@@ -1,5 +1,3 @@
-// Interfaces para o Conversor de Figma para Lua MTA
-
 export interface NodeInfo {
   id: string;
   name: string;

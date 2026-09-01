@@ -1,7 +1,7 @@
 {
   "name": "Conversor de Figma para Lua MTA",
   "id": "1673004204468030177",
-  "api": "1.0.1",
+  "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
   "capabilities": [],
@@ -9,13 +9,5 @@
   "documentAccess": "dynamic-page",
   "editorType": [
     "figma"
-  ],
-  "networkAccess": {
-    "allowedDomains": [
-      "https://cdnjs.cloudflare.com",
-      "https://cdn.jsdelivr.net",
-      "https://fonts.googleapis.com",
-      "https://fonts.gstatic.com"
-    ]
-  }
+  ]
 }

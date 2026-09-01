@@ -1,4 +1,4 @@
-import { NodeInfo, FillInfo, ColorInfo, ConversionConfig, ConversionResult } from './types';
+import { NodeInfo, ColorInfo, ConversionConfig } from './types';
 
 const FONT_CONFIG: Record<string, { mta: string; yScale: number }> = {
   'inter': { mta: 'default', yScale: 1.15 },
@@ -45,14 +45,10 @@ function getFontConfig(fontName: string): { mta: string; yScale: number } {
 
 function toInt(n: number): number { return Math.round(n); }
 
-// Converte um valor 0-1 em byte hex (usado nos códigos de cor #RRGGBBAA do MTA)
 function toHexByte(n: number): string {
   return Math.round(Math.max(0, Math.min(1, n)) * 255).toString(16).padStart(2, '0');
 }
 
-// Assa a opacidade do fill em uma cor sólida composta sobre a cor do background.
-// Assim, um fill semi-transparente aparece no jogo como no Figma (sem depender
-// do fundo do jogo). A opacidade do nó continua sendo transparência real.
 function bakeColor(color: ColorInfo, bg: ColorInfo): ColorInfo {
   const a = typeof color.a === 'number' ? color.a : 1;
   return {
@@ -78,7 +74,6 @@ export function sanitizeFileName(name: string): string {
   return sanitized;
 }
 
-// Formas não retangulares são exportadas como imagem (preservam formato e ícones)
 export function isShapeNode(node: NodeInfo): boolean {
   return (
     node.type === 'VECTOR' ||
@@ -89,8 +84,6 @@ export function isShapeNode(node: NodeInfo): boolean {
   );
 }
 
-// Nós que devem ser exportados como imagem (PNG) e desenhados com dxDrawImage.
-// Inclui retângulos com apenas stroke (sem fill), que eram descartados.
 export function needsImageExport(node: NodeInfo): boolean {
   return !!(
     node.fills.some((f) => f.type === 'IMAGE') ||
@@ -118,9 +111,6 @@ function mapAlignV(align: string | undefined): string {
   }
 }
 
-// Retângulo de desenho em espaço de página, considerando rotação/escala do nó.
-// O exportAsync do Figma gera a imagem já rotacionada no tamanho desse retângulo,
-// então desenhar no bbox local (node.width/height) esmagaria o elemento.
 function computeDrawRect(
   node: SceneNode,
   fallbackX: number,
@@ -195,8 +185,6 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
           visible: fill.visible !== false,
         });
       } else if (fill.visible !== false && (fill as { type: string }).type !== 'NONE') {
-        // Gradiente/padrão: folhas são exportadas como imagem (fidelidade total).
-        // Containers recebem aproximação sólida com a primeira cor como fallback.
         info.hasGradient = true;
         if (
           info.hasChildren &&
@@ -228,7 +216,6 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
     if (typeof textNode.fontSize === 'number') {
       info.fontSize = textNode.fontSize;
     } else {
-      // fontSize mixed (linhas com tamanhos diferentes): estima pela altura do nó
       const lineCount = info.characters ? info.characters.split('\n').length : 1;
       info.fontSize = Math.max(1, Math.round(info.height / lineCount / 1.2));
     }
@@ -237,9 +224,6 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
     }
     if (typeof textNode.textAlignHorizontal === 'string') info.textAlignHorizontal = textNode.textAlignHorizontal;
     if (typeof textNode.textAlignVertical === 'string') info.textAlignVertical = textNode.textAlignVertical;
-    // Cores diferentes dentro do mesmo texto (texto rico) via códigos #RRGGBB.
-    // O dxDrawText do MTA já usa colorCoded; códigos de 6 dígitos (sem alpha),
-    // pois esta versão do MTA não consome o 8º dígito e deixaria "ff" no texto.
     if (typeof textNode.getStyledTextSegments === 'function') {
       try {
         const segments = textNode.getStyledTextSegments(['fills']);
@@ -257,7 +241,7 @@ export function extractNodeInfo(node: SceneNode): NodeInfo | null {
           if (coded) info.characters = coded;
         }
       } catch (_e) {
-        // getStyledTextSegments indisponível: mantém o texto simples
+        return info;
       }
     }
   }
@@ -283,7 +267,6 @@ export function generateLuaCode(
       const fontConfig = node.fontName ? getFontConfig(node.fontName) : { mta: 'default', yScale: 1.15 };
       const alignH = mapAlignH(node.textAlignHorizontal);
       const alignV = mapAlignV(node.textAlignVertical);
-      // Preserva quebras de linha como \n (suportado pelo dxDrawText do MTA)
       const escapedText = text
         .replace(/\r\n/g, '\n')
         .replace(/\r/g, '\n')
@@ -291,7 +274,6 @@ export function generateLuaCode(
         .replace(/\n/g, '\\n')
         .replace(/[ \t]+/g, ' ')
         .replace(/"/g, '\\"');
-      // Escala do nó (grupo ampliado/reduzido) aplicada ao tamanho da fonte
       const textScale = node.transformScale || 1;
       const fontSize = Math.round((typeof node.fontSize === 'number' ? node.fontSize : 12) * textScale);
       const scale = (fontSize / 16) * fontConfig.yScale;
@@ -305,12 +287,8 @@ export function generateLuaCode(
       continue;
     }
 
-    // Imagens e formas não retangulares são desenhadas como imagem.
-    // O exportAsync do Figma já aplica a opacidade do nó e do fill no PNG,
-    // então o desenho usa alpha total (a transparência já está na imagem).
     if (needsImageExport(node)) {
       const fileName = imageFiles.get(node.id) || (sanitizeFileName(node.name) + '.png');
-      // Retângulo em espaço de página (inclui rotação/escala) para tamanho e posição corretos
       const ix = node.imgX !== undefined ? node.imgX : node.x;
       const iy = node.imgY !== undefined ? node.imgY : node.y;
       const iw = node.imgW !== undefined ? node.imgW : node.width;
@@ -323,8 +301,6 @@ export function generateLuaCode(
     if (node.fills.length === 0) continue;
     const fill = node.fills[0];
     if (!fill.visible || fill.type === 'NONE' || !fill.color) continue;
-    // Fill semi-transparente é composto sobre a cor do background (como no Figma).
-    // Fill 0% permanece invisível (a=0 não entra no bake).
     let fillColor = fill.color;
     if (config.backgroundColor && typeof fillColor.a === 'number' && fillColor.a > 0 && fillColor.a < 1) {
       fillColor = bakeColor(fillColor, config.backgroundColor);
@@ -422,7 +398,7 @@ export function extractUniqueFonts(nodes: NodeInfo[]): string[] {
   return Array.from(uniqueFonts);
 }
 
-export function generateMetaXML(imageNames: string[], fontNames: string[] = []): string {
+export function generateMetaXML(imageNames: string[], _fontNames: string[] = []): string {
   const fileEntries: string[] = [];
   for (const name of imageNames) fileEntries.push(`  <file src="assets/images/${name}" />`);
   const files = fileEntries.length > 0 ? '\n' + fileEntries.join('\n') : '';

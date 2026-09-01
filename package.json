@@ -1,7 +1,7 @@
 {
   "name": "Conversor-de-Figma-para-Lua-MTA",
   "version": "1.0.1",
-  "description": "Converte projetos figma em código LUA",
+  "description": "Plugin Figma que converte designs em código Lua para Multi Theft Auto (MTA)",
   "main": "code.js",
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run bundle",
@@ -10,8 +10,8 @@
     "lint:fix": "eslint . --fix",
     "watch": "npx esbuild src/main.ts --bundle --outfile=code.js --format=iife --target=es2017 --watch"
   },
-  "author": "",
-  "license": "",
+  "author": "SrTermax (https://x.com/SrTermax)",
+  "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@figma/eslint-plugin-figma-plugins": "*",

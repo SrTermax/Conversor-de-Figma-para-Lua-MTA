@@ -1,11 +1,8 @@
-// Entry point do plugin Conversor de Figma para Lua MTA
 import { extractNodeInfo, generateLuaCode, generateMetaXML, extractUniqueFonts, needsImageExport, sanitizeFileName } from './lua-generator';
-import { NodeInfo, ConversionConfig, ConversionResult, ColorInfo } from './types';
+import { NodeInfo, ConversionConfig, ColorInfo } from './types';
 
-// Mostrar UI do plugin
 figma.showUI(__html__, { width: 400, height: 600, themeColors: true });
 
-// Escutar mensagens da UI
 figma.ui.onmessage = async (msg) => {
   if (msg.type === 'convert') {
     await convertSelection(msg.backgroundName || 'Background');
@@ -14,11 +11,9 @@ figma.ui.onmessage = async (msg) => {
   }
 };
 
-// Função principal de conversão
 async function convertSelection(backgroundName: string) {
   let selection = figma.currentPage.selection;
 
-  // Se nada selecionado, selecionar tudo automaticamente
   if (selection.length === 0) {
     const allNodes: SceneNode[] = [];
     for (const child of figma.currentPage.children) {
@@ -36,17 +31,14 @@ async function convertSelection(backgroundName: string) {
   }
 
   try {
-    // Encontrar o Background REAL (maior nó que corresponde ao nome informado)
     const background = findRealBackground(selection, backgroundName);
 
-    // Resolução base: tamanho do Background real
     let resW = 1920;
     let resH = 1080;
     if (background && 'width' in background && 'height' in background) {
       resW = Math.round(background.width);
       resH = Math.round(background.height);
     } else {
-      // Fallback: usar o maior nó selecionado (mais provável de ser a tela)
       const largest = findLargestNode(selection);
       if (largest) {
         resW = Math.round(largest.width);
@@ -54,14 +46,12 @@ async function convertSelection(backgroundName: string) {
       }
     }
 
-    // Coletar todos os nós exceto o Background real
     const allNodes: NodeInfo[] = [];
     const visited = new Set<string>();
     for (const node of selection) {
       collectNodes(node, background, allNodes, visited);
     }
 
-    // Configuração de conversão
     const config: ConversionConfig = {
       backgroundName,
       backgroundId: background ? background.id : undefined,
@@ -70,10 +60,8 @@ async function convertSelection(backgroundName: string) {
       resH,
     };
 
-    // Coletar imagens para exportar (IMAGES e formas não retangulares)
     const imageNodes = allNodes.filter((n) => needsImageExport(n));
 
-    // Nomes de arquivo únicos para evitar conflitos entre nós com o mesmo nome
     const imageFileMap = new Map<string, string>();
     const usedNames = new Set<string>();
     for (const n of imageNodes) {
@@ -94,7 +82,6 @@ async function convertSelection(backgroundName: string) {
     const luaCode = generateLuaCode(allNodes, config, imageFileMap);
     const metaXML = generateMetaXML(imageNames, fontNames);
 
-    // Exportar imagens PRIMEIRO (antes de enviar resultado)
     if (imageNodes.length > 0) {
       const images: { name: string; data: Uint8Array }[] = [];
 
@@ -102,8 +89,6 @@ async function convertSelection(backgroundName: string) {
         const figmaNode = await figma.getNodeByIdAsync(nodeInfo.id);
         const fileName = imageFileMap.get(nodeInfo.id);
         if (figmaNode && fileName && 'exportAsync' in figmaNode) {
-          // Ícones/objetos pequenos são exportados em 2x para ficarem nítidos no GTA,
-          // desde que não estourem o limite de 4096px da exportação do Figma
           const exporter = figmaNode as unknown as {
             exportAsync(settings: ExportSettingsImage): Promise<Uint8Array>;
           };
@@ -116,7 +101,6 @@ async function convertSelection(backgroundName: string) {
           } catch (e) {
             console.error(`Erro ao exportar ${nodeInfo.name} em ${exportScale}x:`, e);
           }
-          // Se 2x falhar (ex: limite de 4096px), re-tenta em 1x
           if (!imageData && exportScale > 1) {
             try {
               const retrySettings: ExportSettingsImage = { format: 'PNG', suffix: '', constraint: { type: 'SCALE', value: 1 } };
@@ -147,7 +131,6 @@ async function convertSelection(backgroundName: string) {
       }
     }
 
-    // Enviar resultado para UI (depois das imagens)
     figma.ui.postMessage({
       type: 'result',
       luaCode,
@@ -169,16 +152,12 @@ async function convertSelection(backgroundName: string) {
   }
 }
 
-// Verifica se o nome do nó corresponde ao nome do Background
 function isBackgroundName(name: string, backgroundName: string): boolean {
   const lower = name.toLowerCase().trim();
   const target = backgroundName.toLowerCase().trim();
   return lower === target || lower === 'background';
 }
 
-// Encontra o Background REAL de forma inteligente:
-// percorre toda a árvore e escolhe o MAIOR nó que corresponde ao nome.
-// Assim, grupos pequenos chamados "Background" não conflitam com o real.
 function findRealBackground(selection: readonly SceneNode[], backgroundName: string): SceneNode | null {
   const candidates: SceneNode[] = [];
   const visited = new Set<string>();
@@ -210,7 +189,6 @@ function findRealBackground(selection: readonly SceneNode[], backgroundName: str
   return realBackground;
 }
 
-// Extrai a cor sólida do Background real (usada para compor fills semi-transparentes)
 function extractBackgroundColor(node: SceneNode | null): ColorInfo | undefined {
   if (!node || !('fills' in node) || !Array.isArray(node.fills)) return undefined;
   const fills = node.fills as Paint[];
@@ -222,7 +200,6 @@ function extractBackgroundColor(node: SceneNode | null): ColorInfo | undefined {
   return undefined;
 }
 
-// Retorna o maior nó com dimensões dentro da seleção
 function findLargestNode(selection: readonly SceneNode[]): SceneNode | null {
   let largest: SceneNode | null = null;
   for (const node of selection) {
@@ -236,8 +213,6 @@ function findLargestNode(selection: readonly SceneNode[]): SceneNode | null {
   return largest;
 }
 
-// Coleta os nós recursivamente, ignorando apenas o Background real.
-// Os filhos do Background real ainda são processados (caso ele contenha a UI).
 function collectNodes(
   node: SceneNode,
   background: SceneNode | null,
@@ -247,7 +222,6 @@ function collectNodes(
   if (visited.has(node.id)) return;
   visited.add(node.id);
 
-  // O Background real define a resolução e não entra no código
   if (background && node.id === background.id) {
     if ('children' in node) {
       for (const child of (node as ChildrenMixin).children) {
@@ -257,19 +231,14 @@ function collectNodes(
     return;
   }
 
-  // Extrair informações do nó ANTES dos filhos (pré-ordem)
-  // para que o fill de um container seja desenhado atrás dos filhos, como no Figma.
   const info = extractNodeInfo(node);
   if (info) {
-    // Não adicionar containers vazios (frames/groups sem fill).
-    // Containers com gradiente não são descartados (podem ser exportados como imagem).
     const isContainer = ('children' in node) && info.fills.length === 0 && !info.hasGradient && info.type !== 'TEXT';
     if (!isContainer) {
       allNodes.push(info);
     }
   }
 
-  // Processar filhos depois (profundidade)
   if ('children' in node) {
     for (const child of (node as ChildrenMixin).children) {
       collectNodes(child as SceneNode, background, allNodes, visited);
